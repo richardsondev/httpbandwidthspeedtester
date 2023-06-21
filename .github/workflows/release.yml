@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  release:
+    types: [released]
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+    name: Build and Release
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        target:
+          # Windows
+          - { displayName: 32-bit Windows,
+              rustTarget: i686-pc-windows-gnu,
+              runner: 'ubuntu-latest' }
+
+          - { displayName: 64-bit Windows,
+              rustTarget: x86_64-pc-windows-gnu,
+              runner: 'ubuntu-latest' }
+
+          # Linux
+          - { displayName: 32-bit Linux,
+              rustTarget: i686-unknown-linux-gnu,
+              runner: 'ubuntu-latest' }
+
+          - { displayName: 64-bit Linux,
+              rustTarget: x86_64-unknown-linux-gnu,
+              runner: 'ubuntu-latest' }
+
+          # macOS
+          - { displayName: 64-bit macOS,
+              rustTarget: x86_64-apple-darwin,
+              runner: 'macos-latest' }
+
+    runs-on: ${{ matrix.target.runner }}
+    steps:
+      # Get the machine ready to build
+      - name: Checkout Code
+        uses: actions/checkout@v2
+
+      - name: Add Rust Target
+        run: rustup target add ${{ matrix.target.rustTarget }}
+
+      - name: Add Windows Build Dependencies
+        if: ${{ contains(matrix.target.rustTarget, 'pc-windows') }}
+        run: sudo apt-get install -y gcc-mingw-w64
+
+      - name: Add ARM64 Build Dependencies
+        if: ${{ contains(matrix.target.rustTarget, 'aarch64') }}
+        run: sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Add 32-bit Linux Build Dependencies
+        if: ${{ contains(matrix.target.rustTarget, 'i686-unknown-linux-gnu') }}
+        run: sudo apt-get install -y gcc-multilib
+
+      # Build time
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target.rustTarget }}
+
+      - name: Upload Asset
+        uses: actions/upload-artifact@v3
+        with:
+          name: httpbandwidthspeedtester-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }}
+          path: ./target/${{ matrix.target.rustTarget }}/release/httpbandwidthspeedtester${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }}
+
+      - name: Upload Release Asset
+        if: github.event_name == 'release'
+        id: upload-release-asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run:
+          cp ./target/${{ matrix.target.rustTarget }}/release/httpbandwidthspeedtester${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }} ./httpbandwidthspeedtester-${{ github.ref_name }}-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }} &&
+          gh release upload ${{ github.event.release.tag_name }} ./httpbandwidthspeedtester-${{ github.ref_name }}-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }}#"httpbandwidthspeedtester-${{ github.ref_name }}-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }} (${{ matrix.target.displayName }})"
