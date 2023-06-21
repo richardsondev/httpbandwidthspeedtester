@@ -1,5 +1,5 @@
 [package]
-name = "http_bandwidth_speed_tester"
+name = "httpbandwidthspeedtester"
 version = "0.1.0"
 authors = ["richardsondev"]
 edition = "2021"
