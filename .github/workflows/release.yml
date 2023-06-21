@@ -36,6 +36,18 @@ jobs:
               rustTarget: x86_64-unknown-linux-gnu,
               runner: 'ubuntu-latest' }
 
+          - { displayName: ARM32 ARMv6 Linux,
+              rustTarget: arm-unknown-linux-gnueabi,
+              runner: 'ubuntu-latest' }
+
+          - { displayName: ARM32 ARMv7 Linux,
+              rustTarget: armv7-unknown-linux-gnueabihf,
+              runner: 'ubuntu-latest' }
+
+          - { displayName: ARM64 Linux,
+              rustTarget: aarch64-unknown-linux-gnu,
+              runner: 'ubuntu-latest' }
+
           # macOS
           - { displayName: 64-bit macOS,
               rustTarget: x86_64-apple-darwin,
@@ -54,9 +66,13 @@ jobs:
         if: ${{ contains(matrix.target.rustTarget, 'pc-windows') }}
         run: sudo apt-get install -y gcc-mingw-w64
 
+      - name: Add ARM32 Build Dependencies
+        if: ${{ contains(matrix.target.rustTarget, 'arm') }}
+        run: sudo apt-get install -y gcc-arm-linux-gnueabihf gcc-arm-linux-gnueabi gcc-arm-none-eabi binutils-arm-linux-gnueabi
+
       - name: Add ARM64 Build Dependencies
         if: ${{ contains(matrix.target.rustTarget, 'aarch64') }}
-        run: sudo apt-get install -y gcc-aarch64-linux-gnu
+        run: sudo apt-get install -y gcc-aarch64-linux-gnu crossbuild-essential-arm64
 
       - name: Add 32-bit Linux Build Dependencies
         if: ${{ contains(matrix.target.rustTarget, 'i686-unknown-linux-gnu') }}
