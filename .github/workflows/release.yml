@@ -59,6 +59,12 @@ jobs:
       # Get the machine ready to build
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Update apt-get package list
+        if: ${{ contains(matrix.target.runner, 'ubuntu') }}
+        run: sudo apt-get update
 
       - name: Add Rust Target
         run: rustup target add ${{ matrix.target.rustTarget }}
