@@ -58,7 +58,7 @@ jobs:
     steps:
       # Get the machine ready to build
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
@@ -90,7 +90,7 @@ jobs:
         run: cargo build --release --target ${{ matrix.target.rustTarget }}
 
       - name: Upload Asset
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: httpbandwidthspeedtester-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }}
           path: ./target/${{ matrix.target.rustTarget }}/release/httpbandwidthspeedtester${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }}
