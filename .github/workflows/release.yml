@@ -90,7 +90,7 @@ jobs:
         run: cargo build --release --target ${{ matrix.target.rustTarget }}
 
       - name: Upload Asset
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: httpbandwidthspeedtester-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }}
           path: ./target/${{ matrix.target.rustTarget }}/release/httpbandwidthspeedtester${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }}
