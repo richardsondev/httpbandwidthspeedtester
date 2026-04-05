@@ -110,7 +110,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Send a HEAD request to get the content length
     let res: hyper::Response<Body> = client.get(url.clone()).await?;
     let headers: &hyper::HeaderMap = res.headers();
-    let content_length: u64 = headers.get(CONTENT_LENGTH).unwrap().to_str().unwrap().parse().unwrap();
+    let content_length: u64 = headers
+        .get(CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or_else(|| {
+            eprintln!("Warning: Server did not provide Content-Length header, using chunked reading");
+            0
+        });
 
     // Calculate the number of bytes to download in each thread
     let num_cpus: u64 = num_cpus::get() as u64;
