@@ -3,12 +3,12 @@ name: CI
 on:
   push:
     branches:
-      - master
+      - main
   release:
     types: [released]
   pull_request:
     branches:
-      - master
+      - main
 
 jobs:
   build:
