@@ -34,23 +34,28 @@ jobs:
           # Linux
           - { displayName: 32-bit Linux,
               rustTarget: i686-unknown-linux-gnu,
-              runner: 'ubuntu-latest' }
+              debArch: i386,
+              runner: 'ubuntu-22.04' }
 
           - { displayName: 64-bit Linux,
               rustTarget: x86_64-unknown-linux-gnu,
-              runner: 'ubuntu-latest' }
+              debArch: amd64,
+              runner: 'ubuntu-22.04' }
 
           - { displayName: ARM32 ARMv6 Linux,
               rustTarget: arm-unknown-linux-gnueabi,
-              runner: 'ubuntu-latest' }
+              debArch: armel,
+              runner: 'ubuntu-22.04' }
 
           - { displayName: ARM32 ARMv7 Linux,
               rustTarget: armv7-unknown-linux-gnueabihf,
-              runner: 'ubuntu-latest' }
+              debArch: armhf,
+              runner: 'ubuntu-22.04' }
 
           - { displayName: ARM64 Linux,
               rustTarget: aarch64-unknown-linux-gnu,
-              runner: 'ubuntu-latest' }
+              debArch: arm64,
+              runner: 'ubuntu-22.04' }
 
           # macOS
           - { displayName: 64-bit macOS,
@@ -106,3 +111,30 @@ jobs:
         run:
           cp ./target/${{ matrix.target.rustTarget }}/release/httpbandwidthspeedtester${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }} ./httpbandwidthspeedtester-${{ github.ref_name }}-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }} &&
           gh release upload ${{ github.event.release.tag_name }} ./httpbandwidthspeedtester-${{ github.ref_name }}-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }}#"httpbandwidthspeedtester-${{ github.ref_name }}-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }} (${{ matrix.target.displayName }})"
+
+      - name: Build .deb package
+        if: ${{ github.event_name == 'release' && matrix.target.debArch != '' }}
+        run: |
+          mkdir -p dpkg/DEBIAN dpkg/usr/bin
+          cp ./target/${{ matrix.target.rustTarget }}/release/httpbandwidthspeedtester dpkg/usr/bin/
+          chmod 755 dpkg/usr/bin/httpbandwidthspeedtester
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          cat > dpkg/DEBIAN/control << EOF
+          Package: httpbandwidthspeedtester
+          Version: $VERSION
+          Architecture: ${{ matrix.target.debArch }}
+          Maintainer: richardsondev
+          Description: HTTP bandwidth speed testing tool
+          EOF
+          sed -i 's/^          //' dpkg/DEBIAN/control
+          dpkg-deb --build dpkg httpbandwidthspeedtester_${VERSION}_${{ matrix.target.debArch }}.deb
+
+      - name: Upload .deb Release Asset
+        if: ${{ github.event_name == 'release' && matrix.target.debArch != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          gh release upload ${{ github.event.release.tag_name }} --clobber ./httpbandwidthspeedtester_${VERSION}_${{ matrix.target.debArch }}.deb
