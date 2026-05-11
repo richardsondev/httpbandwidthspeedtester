@@ -1,8 +1,11 @@
 use bytes::Bytes;
 use chrono::Local;
 use futures_util::StreamExt;
-use hyper::{Body, Client, Request, Uri, header::{RANGE, CONTENT_LENGTH}, http::HeaderValue};
+use http_body_util::{BodyStream, Empty};
+use hyper::{Request, Uri, header::{RANGE, CONTENT_LENGTH}, http::HeaderValue};
 use hyper_tls::HttpsConnector;
+use hyper_util::client::legacy::{Client, connect::HttpConnector};
+use hyper_util::rt::TokioExecutor;
 use num_cpus;
 use std::cmp::max;
 use std::collections::VecDeque;
@@ -50,16 +53,17 @@ async fn update_state(chunk: Bytes, download_state: &Arc<Mutex<DownloadState>>) 
 /*
 Download a range of bytes from the file
 */
-async fn start_download(client: Arc<Client<HttpsConnector<hyper::client::HttpConnector>, Body>>, url: Uri, range: String, download_state: Arc<Mutex<DownloadState>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn start_download(client: Arc<Client<HttpsConnector<HttpConnector>, Empty<Bytes>>>, url: Uri, range: String, download_state: Arc<Mutex<DownloadState>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Prepare the request
-    let mut request = Request::new(Body::empty());
+    let mut request = Request::new(Empty::<Bytes>::new());
     *request.method_mut() = hyper::Method::GET;
     *request.uri_mut() = url.clone();
     request.headers_mut().insert(RANGE, HeaderValue::from_str(&range)?);
 
     // Send the request
-    let res: hyper::Response<Body> = client.request(request).await?;
-    let mut body: Body = res.into_body();
+    let res = client.request(request).await?;
+    let body = res.into_body();
+    let mut body_stream = BodyStream::new(body);
 
     // Set the start time
     let mut state: tokio::sync::MutexGuard<'_, DownloadState> = download_state.lock().await;
@@ -67,9 +71,11 @@ async fn start_download(client: Arc<Client<HttpsConnector<hyper::client::HttpCon
     drop(state);
 
     // Process each chunk of data as it arrives
-    while let Some(chunk) = body.next().await {
-        let chunk: Bytes = chunk?;
-        update_state(chunk, &download_state).await;
+    while let Some(frame_result) = body_stream.next().await {
+        let frame = frame_result?;
+        if let Some(chunk) = frame.data_ref() {
+            update_state(chunk.clone(), &download_state).await;
+        }
     }
 
     Ok(())
@@ -103,13 +109,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let url: Uri = url.parse::<Uri>()?;
 
     // Create the HTTP client
-    let https: HttpsConnector<hyper::client::HttpConnector> = HttpsConnector::new();
-    let client: Client<HttpsConnector<hyper::client::HttpConnector>> = Client::builder().build::<_, hyper::Body>(https);
-    let client: Arc<Client<HttpsConnector<hyper::client::HttpConnector>>> = Arc::new(client);
+    let https: HttpsConnector<HttpConnector> = HttpsConnector::new();
+    let client: Client<HttpsConnector<HttpConnector>, Empty<Bytes>> = Client::builder(TokioExecutor::new()).build::<_, Empty<Bytes>>(https);
+    let client: Arc<Client<HttpsConnector<HttpConnector>, Empty<Bytes>>> = Arc::new(client);
 
-    // Send a HEAD request to get the content length
-    let res: hyper::Response<Body> = client.get(url.clone()).await?;
-    let headers: &hyper::HeaderMap = res.headers();
+    // Send a GET request to get the content length
+    let req = Request::builder()
+        .uri(url.clone())
+        .body(Empty::<Bytes>::new())?;
+    let res = client.request(req).await?;
+    let headers = res.headers();
     let content_length: u64 = headers
         .get(CONTENT_LENGTH)
         .and_then(|v| v.to_str().ok())
@@ -144,7 +153,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             format!("{}", (i + 1) * bytes_per_cpu - 1)
         };
         let range: String = format!("bytes={}-{}", start, end);
-        let client: Arc<Client<HttpsConnector<hyper::client::HttpConnector>>> = Arc::clone(&client);
+        let client: Arc<Client<HttpsConnector<HttpConnector>, Empty<Bytes>>> = Arc::clone(&client);
         let download_state: Arc<Mutex<DownloadState>> = download_state.clone();
         let handle: tokio::task::JoinHandle<Result<(), Box<dyn Error + Send + Sync>>> = tokio::spawn(start_download(client, url.clone(), range, download_state));
         handles.push(handle);
