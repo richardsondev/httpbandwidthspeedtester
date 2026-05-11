@@ -35,27 +35,27 @@ jobs:
           - { displayName: 32-bit Linux,
               rustTarget: i686-unknown-linux-gnu,
               debArch: i386,
-              runner: 'ubuntu-latest' }
+              runner: 'ubuntu-22.04' }
 
           - { displayName: 64-bit Linux,
               rustTarget: x86_64-unknown-linux-gnu,
               debArch: amd64,
-              runner: 'ubuntu-latest' }
+              runner: 'ubuntu-22.04' }
 
           - { displayName: ARM32 ARMv6 Linux,
               rustTarget: arm-unknown-linux-gnueabi,
               debArch: armel,
-              runner: 'ubuntu-latest' }
+              runner: 'ubuntu-22.04' }
 
           - { displayName: ARM32 ARMv7 Linux,
               rustTarget: armv7-unknown-linux-gnueabihf,
               debArch: armhf,
-              runner: 'ubuntu-latest' }
+              runner: 'ubuntu-22.04' }
 
           - { displayName: ARM64 Linux,
               rustTarget: aarch64-unknown-linux-gnu,
               debArch: arm64,
-              runner: 'ubuntu-latest' }
+              runner: 'ubuntu-22.04' }
 
           # macOS
           - { displayName: 64-bit macOS,
