@@ -1,0 +1,8 @@
+.git
+target
+**/*.rs.bk
+.idea
+.vscode
+.github
+README.md
+LICENSE
