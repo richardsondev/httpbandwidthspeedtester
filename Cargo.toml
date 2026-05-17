@@ -3,6 +3,7 @@ name = "httpbandwidthspeedtester"
 version = "0.1.0"
 authors = ["richardsondev"]
 edition = "2021"
+rust-version = "1.74"
 
 [dependencies]
 hyper = { version = "1.6", features = ["client", "http1", "http2"] }
