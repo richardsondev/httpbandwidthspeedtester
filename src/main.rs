@@ -4,16 +4,19 @@ use bytes::Bytes;
 use chrono::Local;
 use futures_util::StreamExt;
 use http_body_util::{BodyStream, Empty};
-use hyper::{Request, Uri, header::{RANGE, CONTENT_LENGTH}, http::HeaderValue};
+use hyper::{
+    header::{CONTENT_LENGTH, RANGE},
+    http::HeaderValue,
+    Request, Uri,
+};
 use hyper_tls::HttpsConnector;
-use hyper_util::client::legacy::{Client, connect::HttpConnector};
+use hyper_util::client::legacy::{connect::HttpConnector, Client};
 use hyper_util::rt::TokioExecutor;
-use num_cpus;
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::Arc;
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
 struct DownloadState {
@@ -55,12 +58,19 @@ async fn update_state(chunk: Bytes, download_state: &Arc<Mutex<DownloadState>>) 
 /*
 Download a range of bytes from the file
 */
-async fn start_download(client: Arc<Client<HttpsConnector<HttpConnector>, Empty<Bytes>>>, url: Uri, range: String, download_state: Arc<Mutex<DownloadState>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn start_download(
+    client: Arc<Client<HttpsConnector<HttpConnector>, Empty<Bytes>>>,
+    url: Uri,
+    range: String,
+    download_state: Arc<Mutex<DownloadState>>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Prepare the request
     let mut request = Request::new(Empty::<Bytes>::new());
     *request.method_mut() = hyper::Method::GET;
     *request.uri_mut() = url.clone();
-    request.headers_mut().insert(RANGE, HeaderValue::from_str(&range)?);
+    request
+        .headers_mut()
+        .insert(RANGE, HeaderValue::from_str(&range)?);
 
     // Send the request
     let res = client.request(request).await?;
@@ -99,8 +109,14 @@ async fn print_loop(download_state: Arc<Mutex<DownloadState>>) {
         // Print the average speed
         let avg_speed_kb: u64 = avg_speed / 1024;
         let avg_speed_mb: u64 = avg_speed / (1024 * 1024);
-        
-        println!("[{}] Average speed: {} B/s, {} KB/s, {} MB/s", Local::now().format("%Y-%m-%d %H:%M:%S"), avg_speed, avg_speed_kb, avg_speed_mb);
+
+        println!(
+            "[{}] Average speed: {} B/s, {} KB/s, {} MB/s",
+            Local::now().format("%Y-%m-%d %H:%M:%S"),
+            avg_speed,
+            avg_speed_kb,
+            avg_speed_mb
+        );
     }
 }
 
@@ -112,7 +128,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // Create the HTTP client
     let https: HttpsConnector<HttpConnector> = HttpsConnector::new();
-    let client: Client<HttpsConnector<HttpConnector>, Empty<Bytes>> = Client::builder(TokioExecutor::new()).build::<_, Empty<Bytes>>(https);
+    let client: Client<HttpsConnector<HttpConnector>, Empty<Bytes>> =
+        Client::builder(TokioExecutor::new()).build::<_, Empty<Bytes>>(https);
     let client: Arc<Client<HttpsConnector<HttpConnector>, Empty<Bytes>>> = Arc::new(client);
 
     // Send a GET request to get the content length
@@ -126,7 +143,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or_else(|| {
-            eprintln!("Warning: Server did not provide Content-Length header, using chunked reading");
+            eprintln!(
+                "Warning: Server did not provide Content-Length header, using chunked reading"
+            );
             0
         });
 
@@ -146,7 +165,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let print_handle = tokio::spawn(print_loop(download_state.clone()));
 
     // Start the downloads
-    let mut handles: Vec<tokio::task::JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>> = Vec::new();
+    let mut handles: Vec<tokio::task::JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>> =
+        Vec::new();
     for i in 0..num_cpus {
         let start: u64 = i * bytes_per_cpu;
         let end: String = if i == num_cpus - 1 {
@@ -157,7 +177,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let range: String = format!("bytes={}-{}", start, end);
         let client: Arc<Client<HttpsConnector<HttpConnector>, Empty<Bytes>>> = Arc::clone(&client);
         let download_state: Arc<Mutex<DownloadState>> = download_state.clone();
-        let handle: tokio::task::JoinHandle<Result<(), Box<dyn Error + Send + Sync>>> = tokio::spawn(start_download(client, url.clone(), range, download_state));
+        let handle: tokio::task::JoinHandle<Result<(), Box<dyn Error + Send + Sync>>> =
+            tokio::spawn(start_download(client, url.clone(), range, download_state));
         handles.push(handle);
     }
 
@@ -175,7 +196,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let avg_speed: u64 = total_past_bytes / max(state.past_seconds.len() as u64, 1);
     let avg_speed_kb: u64 = avg_speed / 1024;
     let avg_speed_mb: u64 = avg_speed / (1024 * 1024);
-    println!("Download completed: {} bytes downloaded at an average speed of {} B/s, {} KB/s, {} MB/s", state.total_bytes_downloaded, avg_speed, avg_speed_kb, avg_speed_mb);
+    println!(
+        "Download completed: {} bytes downloaded at an average speed of {} B/s, {} KB/s, {} MB/s",
+        state.total_bytes_downloaded, avg_speed, avg_speed_kb, avg_speed_mb
+    );
 
     Ok(())
 }
