@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 use bytes::Bytes;
 use chrono::Local;
 use futures_util::StreamExt;
