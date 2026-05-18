@@ -62,16 +62,18 @@ Download a range of bytes from the file
 async fn start_download(
     client: Arc<Client<HttpsConnector<HttpConnector>, Empty<Bytes>>>,
     url: Uri,
-    range: String,
+    range: Option<String>,
     download_state: Arc<Mutex<DownloadState>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Prepare the request
     let mut request = Request::new(Empty::<Bytes>::new());
     *request.method_mut() = hyper::Method::GET;
     *request.uri_mut() = url.clone();
-    request
-        .headers_mut()
-        .insert(RANGE, HeaderValue::from_str(&range)?);
+    if let Some(r) = range {
+        request
+            .headers_mut()
+            .insert(RANGE, HeaderValue::from_str(&r)?);
+    }
 
     // Send the request
     let res = client.request(request).await?;
@@ -137,22 +139,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         return Err(format!("Server returned HTTP {}", res.status()).into());
     }
     let headers = res.headers();
-    let content_length: u64 = headers
+    let content_length: Option<u64> = headers
         .get(CONTENT_LENGTH)
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.parse::<u64>().ok())
-        .unwrap_or_else(|| {
-            eprintln!(
-                "Warning: Server did not provide Content-Length header, using chunked reading"
-            );
-            0
-        });
+        .and_then(|v| v.parse::<u64>().ok());
 
     // Calculate the number of bytes to download in each thread
-    let num_cpus: u64 = std::thread::available_parallelism()
+    let cpu_count: u64 = std::thread::available_parallelism()
         .map(NonZeroUsize::get)
         .unwrap_or(1) as u64;
-    let bytes_per_cpu: u64 = content_length / num_cpus;
+
+    let ranges: Vec<Option<String>> = match content_length {
+        Some(cl) if cl > 0 => {
+            let bytes_per_cpu: u64 = cl / cpu_count;
+            (0..cpu_count)
+                .map(|i| {
+                    let start: u64 = i * bytes_per_cpu;
+                    let end: String = if i == cpu_count - 1 {
+                        String::new()
+                    } else {
+                        format!("{}", (i + 1) * bytes_per_cpu - 1)
+                    };
+                    Some(format!("bytes={}-{}", start, end))
+                })
+                .collect()
+        }
+        _ => {
+            eprintln!(
+                "Warning: Server did not provide Content-Length, falling back to single-worker streaming download"
+            );
+            vec![None]
+        }
+    };
 
     // Create the shared download state
     let download_state: Arc<Mutex<DownloadState>> = Arc::new(Mutex::new(DownloadState {
@@ -169,14 +187,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Start the downloads
     let mut handles: Vec<tokio::task::JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>> =
         Vec::new();
-    for i in 0..num_cpus {
-        let start: u64 = i * bytes_per_cpu;
-        let end: String = if i == num_cpus - 1 {
-            "".to_string()
-        } else {
-            format!("{}", (i + 1) * bytes_per_cpu - 1)
-        };
-        let range: String = format!("bytes={}-{}", start, end);
+    for range in ranges {
         let client: Arc<Client<HttpsConnector<HttpConnector>, Empty<Bytes>>> = Arc::clone(&client);
         let download_state: Arc<Mutex<DownloadState>> = download_state.clone();
         let handle: tokio::task::JoinHandle<Result<(), Box<dyn Error + Send + Sync>>> =
