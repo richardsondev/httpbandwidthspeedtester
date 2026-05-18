@@ -133,6 +133,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .uri(url.clone())
         .body(Empty::<Bytes>::new())?;
     let res = client.request(req).await?;
+    if !res.status().is_success() {
+        return Err(format!("Server returned HTTP {}", res.status()).into());
+    }
     let headers = res.headers();
     let content_length: u64 = headers
         .get(CONTENT_LENGTH)
