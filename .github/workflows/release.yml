@@ -70,7 +70,7 @@ jobs:
     steps:
       # Get the machine ready to build
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
 
@@ -107,7 +107,7 @@ jobs:
         run: cargo build --release --target ${{ matrix.target.rustTarget }}
 
       - name: Upload Asset
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: httpbandwidthspeedtester-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }}
           path: ./target/${{ matrix.target.rustTarget }}/release/httpbandwidthspeedtester${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }}
