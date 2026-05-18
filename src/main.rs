@@ -105,15 +105,15 @@ async fn print_loop(download_state: Arc<Mutex<DownloadState>>) {
         let avg_speed: u64 = total_past_bytes / max(state.past_seconds.len() as u64, 1);
 
         // Print the average speed
-        let avg_speed_kb: u64 = avg_speed / 1024;
-        let avg_speed_mb: u64 = avg_speed / (1024 * 1024);
+        let avg_speed_kib: u64 = avg_speed / 1024;
+        let avg_speed_mib: u64 = avg_speed / (1024 * 1024);
 
         println!(
-            "[{}] Average speed: {} B/s, {} KB/s, {} MB/s",
+            "[{}] Average speed: {} B/s, {} KiB/s, {} MiB/s",
             Local::now().format("%Y-%m-%d %H:%M:%S"),
             avg_speed,
-            avg_speed_kb,
-            avg_speed_mb
+            avg_speed_kib,
+            avg_speed_mib
         );
     }
 }
@@ -208,11 +208,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let state: tokio::sync::MutexGuard<'_, DownloadState> = download_state.lock().await;
     let elapsed_secs = start_time.elapsed().as_secs_f64().max(1e-9);
     let avg_speed: u64 = (state.total_bytes_downloaded as f64 / elapsed_secs) as u64;
-    let avg_speed_kb: u64 = avg_speed / 1024;
-    let avg_speed_mb: u64 = avg_speed / (1024 * 1024);
+    let avg_speed_kib: u64 = avg_speed / 1024;
+    let avg_speed_mib: u64 = avg_speed / (1024 * 1024);
     println!(
-        "Download completed: {} bytes downloaded at an average speed of {} B/s, {} KB/s, {} MB/s",
-        state.total_bytes_downloaded, avg_speed, avg_speed_kb, avg_speed_mb
+        "Download completed: {} bytes downloaded at an average speed of {} B/s, {} KiB/s, {} MiB/s",
+        state.total_bytes_downloaded, avg_speed, avg_speed_kib, avg_speed_mib
     );
 
     Ok(())
