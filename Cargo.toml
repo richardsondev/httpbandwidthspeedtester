@@ -11,7 +11,6 @@ hyper-tls = "0.6"
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "tokio"] }
 http-body-util = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "net"] }
-num_cpus = "1.17.0"
 bytes = "1.11"
 tokio-util = { version = "0.7", features = ["codec"] }
 chrono = "0.4"
