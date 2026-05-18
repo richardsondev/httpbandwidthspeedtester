@@ -77,6 +77,11 @@ jobs:
       - name: Add Rust Target
         run: rustup target add ${{ matrix.target.rustTarget }}
 
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.7.10
+        with:
+          key: ${{ matrix.target.rustTarget }}
+
       - name: Add Windows Build Dependencies
         if: ${{ contains(matrix.target.rustTarget, 'pc-windows') }}
         run: sudo apt-get install -y gcc-mingw-w64
