@@ -164,6 +164,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // Start the print loop
     let print_handle = tokio::spawn(print_loop(download_state.clone()));
+    let start_time = Instant::now();
 
     // Start the downloads
     let mut handles: Vec<tokio::task::JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>> =
@@ -193,8 +194,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // Print out the total bytes downloaded and the average speed
     let state: tokio::sync::MutexGuard<'_, DownloadState> = download_state.lock().await;
-    let total_past_bytes: u64 = state.past_seconds.iter().sum();
-    let avg_speed: u64 = total_past_bytes / max(state.past_seconds.len() as u64, 1);
+    let elapsed_secs = start_time.elapsed().as_secs_f64().max(1e-9);
+    let avg_speed: u64 = (state.total_bytes_downloaded as f64 / elapsed_secs) as u64;
     let avg_speed_kb: u64 = avg_speed / 1024;
     let avg_speed_mb: u64 = avg_speed / (1024 * 1024);
     println!(
