@@ -130,8 +130,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Client::builder(TokioExecutor::new()).build::<_, Empty<Bytes>>(https);
     let client: Arc<Client<HttpsConnector<HttpConnector>, Empty<Bytes>>> = Arc::new(client);
 
-    // Send a GET request to get the content length
+    // Send a HEAD request to get the content length
     let req = Request::builder()
+        .method(hyper::Method::HEAD)
         .uri(url.clone())
         .body(Empty::<Bytes>::new())?;
     let res = client.request(req).await?;
