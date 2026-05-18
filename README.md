@@ -29,6 +29,17 @@ cargo run --release "http://yourserver.example.com/testfile.bin"
 
 The application will print out the average download speed over the last 10 seconds every second. It measures the bandwidth by downloading a file and tracking the amount of data received over time. The application will exit when all parts of the file have been downloaded.
 
+### HTTPS
+
+The same command form works for HTTPS URLs — the binary is built against
+`hyper-tls` so it uses the system OpenSSL stack and the OS trust store.
+On minimal container images, install `ca-certificates` (or copy in the CA
+bundle) so TLS verification succeeds:
+
+```bash
+cargo run --release "https://yourserver.example.com/testfile.bin"
+```
+
 ## Creating Your Own Test File
 
 If you want to create your own test file on a remote server, you can do so using the following bash command:
