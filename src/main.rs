@@ -15,6 +15,7 @@ use hyper_util::rt::TokioExecutor;
 use std::cmp::max;
 use std::collections::VecDeque;
 use std::error::Error;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
@@ -150,7 +151,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         });
 
     // Calculate the number of bytes to download in each thread
-    let num_cpus: u64 = num_cpus::get() as u64;
+    let num_cpus: u64 = std::thread::available_parallelism()
+        .map(NonZeroUsize::get)
+        .unwrap_or(1) as u64;
     let bytes_per_cpu: u64 = content_length / num_cpus;
 
     // Create the shared download state
