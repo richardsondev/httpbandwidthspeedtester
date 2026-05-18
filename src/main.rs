@@ -78,11 +78,6 @@ async fn start_download(
     let body = res.into_body();
     let mut body_stream = BodyStream::new(body);
 
-    // Set the start time
-    let mut state: tokio::sync::MutexGuard<'_, DownloadState> = download_state.lock().await;
-    state.last_second = Instant::now();
-    drop(state);
-
     // Process each chunk of data as it arrives
     while let Some(frame_result) = body_stream.next().await {
         let frame = frame_result?;
