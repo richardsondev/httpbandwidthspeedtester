@@ -6,7 +6,7 @@ This application is a very simple bandwidth testing tool written in Rust. It is 
 
 To run this application, you will need:
 
-- Rust 1.41.0 or later
+- Rust 1.74.0 or later (as declared by `rust-version` in `Cargo.toml`)
 - Cargo (usually comes with Rust)
 
 ## How to Use
