@@ -2,6 +2,7 @@
 
 use bytes::Bytes;
 use chrono::Local;
+use clap::Parser;
 use futures_util::StreamExt;
 use http_body_util::{BodyStream, Empty};
 use httpbandwidthspeedtester::{compute_ranges, Speed};
@@ -118,11 +119,48 @@ async fn print_loop(download_state: Arc<Mutex<DownloadState>>) {
     }
 }
 
+/// Command-line arguments for the speedtester binary.
+///
+/// One positional argument is accepted today — the URL to download. Using
+/// `clap` here instead of `std::env::args().nth(1).expect(…)` gives us:
+///   * a friendly `error: the following required arguments were not provided`
+///     message when the URL is missing, instead of a panic backtrace,
+///   * `--help` and `--version` for free, and
+///   * up-front validation of the URL scheme so callers see a clear error
+///     instead of a hyper connector failure deep in the stack.
+#[derive(Parser, Debug)]
+#[command(
+    name = "httpbandwidthspeedtester",
+    version,
+    about = "Measure HTTP/HTTPS download bandwidth with parallel range requests",
+    long_about = None,
+)]
+struct Cli {
+    /// URL of the file to download (must use http:// or https://).
+    #[arg(value_name = "URL", value_parser = parse_http_uri)]
+    url: Uri,
+}
+
+/// Parse the URL argument into a `Uri` and require an http/https scheme.
+///
+/// `hyper-tls` only supports those two schemes; anything else (e.g. `ftp://`,
+/// `file://`, a bare hostname with no scheme at all) produces a connector
+/// error several stack frames deep. Rejecting it here gives the user a much
+/// clearer message.
+fn parse_http_uri(s: &str) -> Result<Uri, String> {
+    let uri: Uri = s.parse().map_err(|e| format!("invalid URL: {e}"))?;
+    match uri.scheme_str() {
+        Some("http") | Some("https") => Ok(uri),
+        Some(other) => Err(format!(
+            "unsupported URL scheme `{other}://`; expected http:// or https://"
+        )),
+        None => Err("URL is missing a scheme; expected http:// or https://".to_string()),
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Parse the URL from the command line arguments
-    let url: String = std::env::args().nth(1).expect("URL is required");
-    let url: Uri = url.parse::<Uri>()?;
+    let Cli { url } = Cli::parse();
 
     // Create the HTTP client
     let https: HttpsConnector<HttpConnector> = HttpsConnector::new();

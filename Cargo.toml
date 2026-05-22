@@ -13,6 +13,7 @@ name = "httpbandwidthspeedtester"
 path = "src/main.rs"
 
 [dependencies]
+clap = { version = "4", features = ["derive"] }
 hyper = { version = "1.6", features = ["client", "http1", "http2"] }
 hyper-tls = "0.6"
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "tokio"] }
