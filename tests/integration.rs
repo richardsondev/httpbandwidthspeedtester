@@ -13,19 +13,13 @@
 //                                                 N × file_size bytes
 //   * `non_success_status_exits_non_zero`        — B2 regression: a 404 must
 //                                                 fail the binary
-//   * `accept_ranges_none_still_succeeds`        — B5 prep: a server that
-//                                                 advertises `Accept-Ranges:
-//                                                 none` must still complete
-//                                                 successfully (the current
-//                                                 binary will fan out; the
-//                                                 b5-accept-ranges PR will
-//                                                 switch this case to a
-//                                                 single-worker download —
-//                                                 the test asserts only the
-//                                                 user-visible contract:
-//                                                 success exit code and the
-//                                                 full byte count in the
-//                                                 final summary)
+//   * `accept_ranges_none_still_succeeds`        — B5 regression: a server
+//                                                 that advertises
+//                                                 `Accept-Ranges: none` must
+//                                                 fall back to a single
+//                                                 worker and report exactly
+//                                                 `file_size` bytes — never
+//                                                 `cpu_count * file_size`.
 //   * `slow_server_completes`                    — sanity: a server that
 //                                                 trickles bytes still
 //                                                 finishes correctly
@@ -188,11 +182,9 @@ async fn non_success_status_exits_non_zero() {
 
 #[tokio::test]
 async fn accept_ranges_none_still_succeeds() {
-    // B5 prep: today the binary fans out and the mock returns the whole body
-    // for every range, so total bytes will be cpu_count * file_size. After
-    // the b5-accept-ranges PR lands, this test will be tightened to assert
-    // total == file_size. For now, only assert the user-visible contract:
-    // the binary exits 0 and produces a parseable summary line.
+    // B5: server advertises `Accept-Ranges: none` (or omits the header). The
+    // binary must NOT fan out, must fall back to a single-worker download,
+    // and must report exactly `file_size` bytes.
     let mock = MockServer::start().await;
     let body = vec![0u8; 8 * 1024];
 
@@ -219,9 +211,11 @@ async fn accept_ranges_none_still_succeeds() {
         code, 0,
         "binary exited non-zero\nstdout: {stdout}\nstderr: {stderr}"
     );
-    assert!(
-        parse_total_bytes(&stdout).is_some(),
-        "expected a summary line; stdout: {stdout}"
+    let total = parse_total_bytes(&stdout).expect("no summary line");
+    assert_eq!(
+        total,
+        body.len() as u64,
+        "Accept-Ranges: none must fall back to a single worker (file_size bytes), got {total}"
     );
 }
 

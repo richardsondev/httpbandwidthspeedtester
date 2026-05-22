@@ -6,7 +6,7 @@ use futures_util::StreamExt;
 use http_body_util::{BodyStream, Empty};
 use httpbandwidthspeedtester::{compute_ranges, Speed};
 use hyper::{
-    header::{CONTENT_LENGTH, RANGE},
+    header::{ACCEPT_RANGES, CONTENT_LENGTH, RANGE},
     http::HeaderValue,
     Request, Uri,
 };
@@ -145,13 +145,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.parse::<u64>().ok());
 
+    // Determine if the server advertises range support. The HTTP spec says the
+    // valid values are `bytes` (ranges supported) or `none` (explicitly not
+    // supported); a missing header is also treated as "no support" because we
+    // cannot rely on it. When ranges aren't supported, fanning out N range
+    // requests would either fail or — worse — cause each worker to receive the
+    // entire body (some servers silently ignore the `Range` header and answer
+    // with `200 OK`), inflating the reported byte count by `cpu_count`.
+    let accepts_ranges: bool = headers
+        .get(ACCEPT_RANGES)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| {
+            v.split(',')
+                .any(|tok| tok.trim().eq_ignore_ascii_case("bytes"))
+        })
+        .unwrap_or(false);
+
     // Calculate the number of bytes to download in each thread
     let cpu_count: u64 = std::thread::available_parallelism()
         .map(NonZeroUsize::get)
         .unwrap_or(1) as u64;
 
     let ranges: Vec<Option<String>> = match content_length {
-        Some(cl) if cl > 0 => compute_ranges(Some(cl), cpu_count),
+        Some(cl) if cl > 0 && accepts_ranges => compute_ranges(Some(cl), cpu_count),
+        Some(_) if !accepts_ranges => {
+            eprintln!(
+                "Warning: Server does not advertise `Accept-Ranges: bytes`, falling back to single-worker sequential download"
+            );
+            compute_ranges(None, cpu_count)
+        }
         _ => {
             eprintln!(
                 "Warning: Server did not provide Content-Length, falling back to single-worker streaming download"
