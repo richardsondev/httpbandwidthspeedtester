@@ -18,44 +18,37 @@ use std::cmp::max;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::num::NonZeroUsize;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
 
-struct DownloadState {
-    bytes_last_second: u64,
-    past_seconds: VecDeque<u64>,
-    last_second: Instant,
-    total_bytes_downloaded: u64,
+struct Counters {
+    bytes_current_bucket: AtomicU64,
+    total_bytes_downloaded: AtomicU64,
 }
 
-/*
-Update the state with a new chunk of data
-*/
-async fn update_state(chunk: Bytes, download_state: &Arc<Mutex<DownloadState>>) {
-    let mut state = download_state.lock().await;
-    let bytes = chunk.len() as u64;
-
-    // Add the bytes to the total of the last second
-    state.bytes_last_second += bytes;
-
-    // Check if a second has passed
-    if state.last_second.elapsed() >= Duration::from_secs(1) {
-        // Push the number of bytes of the last second into past_seconds
-        // and remove old seconds if necessary
-        let bytes_sec = state.bytes_last_second;
-        state.past_seconds.push_back(bytes_sec);
-        if state.past_seconds.len() > 10 {
-            state.past_seconds.pop_front();
+impl Counters {
+    fn new() -> Self {
+        Self {
+            bytes_current_bucket: AtomicU64::new(0),
+            total_bytes_downloaded: AtomicU64::new(0),
         }
-
-        // Reset bytes_last_second and last_second
-        state.bytes_last_second = 0;
-        state.last_second = Instant::now();
     }
 
-    // Add the bytes to the total_bytes_downloaded
-    state.total_bytes_downloaded += bytes;
+    fn record(&self, bytes: u64) {
+        self.bytes_current_bucket
+            .fetch_add(bytes, Ordering::Relaxed);
+        self.total_bytes_downloaded
+            .fetch_add(bytes, Ordering::Relaxed);
+    }
+
+    fn take_bucket(&self) -> u64 {
+        self.bytes_current_bucket.swap(0, Ordering::Relaxed)
+    }
+
+    fn total(&self) -> u64 {
+        self.total_bytes_downloaded.load(Ordering::Relaxed)
+    }
 }
 
 /*
@@ -65,7 +58,7 @@ async fn start_download(
     client: Arc<Client<HttpsConnector<HttpConnector>, Empty<Bytes>>>,
     url: Uri,
     range: Option<String>,
-    download_state: Arc<Mutex<DownloadState>>,
+    counters: Arc<Counters>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Prepare the request
     let mut request = Request::new(Empty::<Bytes>::new());
@@ -86,7 +79,7 @@ async fn start_download(
     while let Some(frame_result) = body_stream.next().await {
         let frame = frame_result?;
         if let Some(chunk) = frame.data_ref() {
-            update_state(chunk.clone(), &download_state).await;
+            counters.record(chunk.len() as u64);
         }
     }
 
@@ -96,15 +89,21 @@ async fn start_download(
 /*
 Print the download speed every second
 */
-async fn print_loop(download_state: Arc<Mutex<DownloadState>>) {
+async fn print_loop(counters: Arc<Counters>) {
+    let mut past_seconds: VecDeque<u64> = VecDeque::with_capacity(10);
+
     loop {
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        let state = download_state.lock().await;
+        let bytes_this_second = counters.take_bucket();
+        past_seconds.push_back(bytes_this_second);
+        if past_seconds.len() > 10 {
+            past_seconds.pop_front();
+        }
 
         // Calculate the average download speed over the last 10 seconds
-        let total_past_bytes: u64 = state.past_seconds.iter().sum();
-        let avg_speed: u64 = total_past_bytes / max(state.past_seconds.len() as u64, 1);
+        let total_past_bytes: u64 = past_seconds.iter().sum();
+        let avg_speed: u64 = total_past_bytes / max(past_seconds.len() as u64, 1);
 
         // Print the average speed
         let speed = Speed::from_bps(avg_speed);
@@ -220,16 +219,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     };
 
-    // Create the shared download state
-    let download_state: Arc<Mutex<DownloadState>> = Arc::new(Mutex::new(DownloadState {
-        bytes_last_second: 0,
-        past_seconds: VecDeque::with_capacity(10),
-        last_second: Instant::now(),
-        total_bytes_downloaded: 0,
-    }));
+    // Create the shared download counters
+    let counters: Arc<Counters> = Arc::new(Counters::new());
 
     // Start the print loop
-    let print_handle = tokio::spawn(print_loop(download_state.clone()));
+    let print_handle = tokio::spawn(print_loop(counters.clone()));
     let start_time = Instant::now();
 
     // Start the downloads
@@ -237,9 +231,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Vec::new();
     for range in ranges {
         let client: Arc<Client<HttpsConnector<HttpConnector>, Empty<Bytes>>> = Arc::clone(&client);
-        let download_state: Arc<Mutex<DownloadState>> = download_state.clone();
+        let counters: Arc<Counters> = counters.clone();
         let handle: tokio::task::JoinHandle<Result<(), Box<dyn Error + Send + Sync>>> =
-            tokio::spawn(start_download(client, url.clone(), range, download_state));
+            tokio::spawn(start_download(client, url.clone(), range, counters));
         handles.push(handle);
     }
 
@@ -252,13 +246,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     print_handle.abort();
 
     // Print out the total bytes downloaded and the average speed
-    let state: tokio::sync::MutexGuard<'_, DownloadState> = download_state.lock().await;
+    let total_bytes = counters.total();
     let elapsed_secs = start_time.elapsed().as_secs_f64().max(1e-9);
-    let avg_speed: u64 = (state.total_bytes_downloaded as f64 / elapsed_secs) as u64;
+    let avg_speed: u64 = (total_bytes as f64 / elapsed_secs) as u64;
     let speed = Speed::from_bps(avg_speed);
     println!(
         "Download completed: {} bytes downloaded at an average speed of {} B/s, {} KiB/s, {} MiB/s",
-        state.total_bytes_downloaded, speed.bps, speed.kib_s, speed.mib_s
+        total_bytes, speed.bps, speed.kib_s, speed.mib_s
     );
 
     Ok(())
