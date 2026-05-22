@@ -2,6 +2,6 @@
 # the same compiler. Bumped via PR alongside any MSRV bump in
 # Cargo.toml.
 [toolchain]
-channel    = "1.85.0"
+channel    = "1.93.0"
 components = ["rustfmt", "clippy"]
 profile    = "minimal"
