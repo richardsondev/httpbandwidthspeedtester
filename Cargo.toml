@@ -20,9 +20,7 @@ hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "
 http-body-util = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "net"] }
 bytes = "1.11"
-tokio-util = { version = "0.7", features = ["codec"] }
 chrono = "0.4"
-tokio-native-tls = "0.3"
 futures-util = "0.3"
 openssl = { version = "0.10.79", features = ["vendored"] }
 

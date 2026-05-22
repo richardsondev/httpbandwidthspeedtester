@@ -506,8 +506,6 @@ dependencies = [
  "hyper-util",
  "openssl",
  "tokio",
- "tokio-native-tls",
- "tokio-util",
  "wiremock",
 ]
 
