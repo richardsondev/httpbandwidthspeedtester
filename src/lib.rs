@@ -10,14 +10,18 @@
 /// bytes-per-second figure using 1024-based (binary) division.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Speed {
+    /// Bytes per second (the raw figure passed to [`Speed::from_bps`]).
     pub bps: u64,
+    /// Kibibytes per second (`bps / 1024`, rounded down).
     pub kib_s: u64,
+    /// Mebibytes per second (`bps / 1024 / 1024`, rounded down).
     pub mib_s: u64,
 }
 
 impl Speed {
     /// Format `bytes_per_sec` into B/s, KiB/s, and MiB/s.
-    pub fn from_bps(bytes_per_sec: u64) -> Self {
+    #[must_use]
+    pub const fn from_bps(bytes_per_sec: u64) -> Self {
         Self {
             bps: bytes_per_sec,
             kib_s: bytes_per_sec / 1024,
@@ -40,6 +44,7 @@ impl Speed {
 ///
 /// `cpu_count` is clamped to at least 1 to avoid divide-by-zero and to match
 /// the binary's runtime behaviour for single-CPU systems.
+#[must_use]
 pub fn compute_ranges(content_length: Option<u64>, cpu_count: u64) -> Vec<Option<String>> {
     let cpu_count = cpu_count.max(1);
     match content_length {
@@ -53,7 +58,7 @@ pub fn compute_ranges(content_length: Option<u64>, cpu_count: u64) -> Vec<Option
                     } else {
                         format!("{}", (i + 1) * bytes_per_cpu - 1)
                     };
-                    Some(format!("bytes={}-{}", start, end))
+                    Some(format!("bytes={start}-{end}"))
                 })
                 .collect()
         }

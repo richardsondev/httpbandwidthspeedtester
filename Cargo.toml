@@ -35,3 +35,20 @@ lto = "fat"
 codegen-units = 1
 strip = true
 panic = "abort"
+
+[lints.rust]
+unsafe_code      = "forbid"
+missing_docs     = "deny"
+unreachable_pub  = "deny"
+rust_2018_idioms = { level = "deny", priority = -1 }
+
+[lints.clippy]
+all      = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+nursery  = { level = "deny", priority = -1 }
+# Idiomatic in this crate: types like `httpbandwidthspeedtester::Speed`
+# inside the `httpbandwidthspeedtester` crate are unavoidable here.
+module_name_repetitions = "allow"
+# h2/hyper/idna routinely ship multiple versions transitively;
+# tracked by cargo-deny separately.
+multiple_crate_versions = "allow"

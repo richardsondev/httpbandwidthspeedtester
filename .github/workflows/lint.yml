@@ -33,3 +33,8 @@ jobs:
 
       - name: cargo clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: cargo doc (rustdoc lints)
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --no-deps --all-features
