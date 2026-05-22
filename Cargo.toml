@@ -4,6 +4,13 @@ version = "0.1.0"
 authors = ["richardsondev"]
 edition = "2021"
 rust-version = "1.86"
+description = "Measure HTTP/HTTPS download bandwidth with parallel range requests"
+license = "MIT"
+repository = "https://github.com/richardsondev/httpbandwidthspeedtester"
+homepage = "https://github.com/richardsondev/httpbandwidthspeedtester"
+readme = "README.md"
+keywords = ["http", "download", "bandwidth", "speedtest", "cli"]
+categories = ["command-line-utilities", "network-programming"]
 
 [lib]
 path = "src/lib.rs"
