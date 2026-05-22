@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: MIT
 
+//! Binary entrypoint for the HTTP bandwidth speed-tester.
+//!
+//! Wires up the helpers in the sibling library crate
+//! (`httpbandwidthspeedtester::lib`) to a hyper-based HTTPS client, a
+//! per-second `print_loop`, and a fan-out of range-aware workers. Run
+//! with `httpbandwidthspeedtester <URL>`; see `--help` for details.
+
 use bytes::Bytes;
 use chrono::Local;
 use clap::Parser;
@@ -22,19 +29,27 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+/// Per-second and lifetime byte counters shared between workers and the
+/// `print_loop`. Lock-free: every operation is a relaxed atomic.
 struct Counters {
+    /// Bytes accumulated during the in-progress one-second window.
+    /// Reset by `print_loop` via [`Counters::take_bucket`].
     bytes_current_bucket: AtomicU64,
+    /// Total bytes downloaded across all workers since startup.
     total_bytes_downloaded: AtomicU64,
 }
 
 impl Counters {
-    fn new() -> Self {
+    /// Construct a fresh set of zeroed counters.
+    const fn new() -> Self {
         Self {
             bytes_current_bucket: AtomicU64::new(0),
             total_bytes_downloaded: AtomicU64::new(0),
         }
     }
 
+    /// Add `bytes` to both the current-second bucket and the lifetime
+    /// total. Called once per body chunk from each worker.
     fn record(&self, bytes: u64) {
         self.bytes_current_bucket
             .fetch_add(bytes, Ordering::Relaxed);
@@ -42,10 +57,13 @@ impl Counters {
             .fetch_add(bytes, Ordering::Relaxed);
     }
 
+    /// Atomically read the current-second bucket and zero it. Called
+    /// once per second by `print_loop`.
     fn take_bucket(&self) -> u64 {
         self.bytes_current_bucket.swap(0, Ordering::Relaxed)
     }
 
+    /// Snapshot of the lifetime total bytes downloaded.
     fn total(&self) -> u64 {
         self.total_bytes_downloaded.load(Ordering::Relaxed)
     }
@@ -149,7 +167,7 @@ struct Cli {
 fn parse_http_uri(s: &str) -> Result<Uri, String> {
     let uri: Uri = s.parse().map_err(|e| format!("invalid URL: {e}"))?;
     match uri.scheme_str() {
-        Some("http") | Some("https") => Ok(uri),
+        Some("http" | "https") => Ok(uri),
         Some(other) => Err(format!(
             "unsupported URL scheme `{other}://`; expected http:// or https://"
         )),
@@ -192,16 +210,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let accepts_ranges: bool = headers
         .get(ACCEPT_RANGES)
         .and_then(|v| v.to_str().ok())
-        .map(|v| {
+        .is_some_and(|v| {
             v.split(',')
                 .any(|tok| tok.trim().eq_ignore_ascii_case("bytes"))
-        })
-        .unwrap_or(false);
+        });
 
     // Calculate the number of bytes to download in each thread
-    let cpu_count: u64 = std::thread::available_parallelism()
-        .map(NonZeroUsize::get)
-        .unwrap_or(1) as u64;
+    let cpu_count: u64 = std::thread::available_parallelism().map_or(1, NonZeroUsize::get) as u64;
 
     let ranges: Vec<Option<String>> = match content_length {
         Some(cl) if cl > 0 && accepts_ranges => compute_ranges(Some(cl), cpu_count),
@@ -248,6 +263,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Print out the total bytes downloaded and the average speed
     let total_bytes = counters.total();
     let elapsed_secs = start_time.elapsed().as_secs_f64().max(1e-9);
+    // The cast triplet (u64 → f64 → u64) is a pragmatic choice for a
+    // human-readable B/s figure: for byte counts up to ~9 PB the f64
+    // mantissa carries enough precision, and the final value is
+    // guaranteed non-negative and bounded by `total_bytes`, so neither
+    // sign loss nor truncation is observable in practice.
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
     let avg_speed: u64 = (total_bytes as f64 / elapsed_secs) as u64;
     let speed = Speed::from_bps(avg_speed);
     println!(

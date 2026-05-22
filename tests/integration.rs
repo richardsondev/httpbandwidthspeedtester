@@ -1,28 +1,24 @@
 // SPDX-License-Identifier: MIT
-//
-// End-to-end integration tests that spin up a mock HTTP server with
-// `wiremock` and shell out to the release binary so the assertions cover the
-// whole code path including argv parsing, the HEAD probe, the per-worker
-// range fan-out, and the final summary line.
-//
-// Scenarios covered:
-//   * `serves_file_with_content_length`         — happy path, exact byte count
-//   * `serves_file_without_content_length`      — B1 regression: chunked /
-//                                                 streaming fallback, *not* a
-//                                                 fan-out that downloads
-//                                                 N × file_size bytes
-//   * `non_success_status_exits_non_zero`        — B2 regression: a 404 must
-//                                                 fail the binary
-//   * `accept_ranges_none_still_succeeds`        — B5 regression: a server
-//                                                 that advertises
-//                                                 `Accept-Ranges: none` must
-//                                                 fall back to a single
-//                                                 worker and report exactly
-//                                                 `file_size` bytes — never
-//                                                 `cpu_count * file_size`.
-//   * `slow_server_completes`                    — sanity: a server that
-//                                                 trickles bytes still
-//                                                 finishes correctly
+
+//! End-to-end integration tests that spin up a mock HTTP server with
+//! `wiremock` and shell out to the release binary so the assertions
+//! cover the whole code path including argv parsing, the HEAD probe,
+//! the per-worker range fan-out, and the final summary line.
+//!
+//! Scenarios covered:
+//!
+//! * `serves_file_with_content_length` — happy path, exact byte count.
+//! * `serves_file_without_content_length` — B1 regression: chunked /
+//!   streaming fallback, *not* a fan-out that downloads
+//!   `N × file_size` bytes.
+//! * `non_success_status_exits_non_zero` — B2 regression: a 404 must
+//!   fail the binary.
+//! * `accept_ranges_none_still_succeeds` — B5 regression: a server
+//!   that advertises `Accept-Ranges: none` must fall back to a single
+//!   worker and report exactly `file_size` bytes — never
+//!   `cpu_count × file_size`.
+//! * `slow_server_completes` — sanity: a server that trickles bytes
+//!   still finishes correctly.
 
 use std::process::Stdio;
 use std::time::Duration;
@@ -34,12 +30,12 @@ use wiremock::{Mock, MockServer, Respond, ResponseTemplate};
 
 /// Path to the binary under test. Cargo sets `CARGO_BIN_EXE_<name>` when
 /// running integration tests, so this is rebuilt and located automatically.
-fn bin_path() -> &'static str {
+const fn bin_path() -> &'static str {
     env!("CARGO_BIN_EXE_httpbandwidthspeedtester")
 }
 
 /// Run the binary against `url` with a generous wall-clock timeout and return
-/// (exit_code, stdout, stderr).
+/// (`exit_code`, `stdout`, `stderr`).
 async fn run_binary(url: &str) -> (i32, String, String) {
     let mut child = Command::new(bin_path())
         .arg(url)
@@ -277,7 +273,9 @@ impl Respond for RangeResponder {
         let end: usize = if end_s.is_empty() {
             self.body.len().saturating_sub(1)
         } else {
-            end_s.parse().unwrap_or(self.body.len().saturating_sub(1))
+            end_s
+                .parse()
+                .unwrap_or_else(|_| self.body.len().saturating_sub(1))
         };
         let end = end.min(self.body.len().saturating_sub(1));
         let slice = if start > end {
