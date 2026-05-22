@@ -59,19 +59,25 @@ impl Counters {
 
     /// Atomically read the current-second bucket and zero it. Called
     /// once per second by `print_loop`.
+    #[must_use]
     fn take_bucket(&self) -> u64 {
         self.bytes_current_bucket.swap(0, Ordering::Relaxed)
     }
 
     /// Snapshot of the lifetime total bytes downloaded.
+    #[must_use]
     fn total(&self) -> u64 {
         self.total_bytes_downloaded.load(Ordering::Relaxed)
     }
 }
 
-/*
-Download a range of bytes from the file
-*/
+impl Default for Counters {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Download a range of bytes from the file
 async fn start_download(
     client: Arc<Client<HttpsConnector<HttpConnector>, Empty<Bytes>>>,
     url: Uri,
@@ -104,9 +110,7 @@ async fn start_download(
     Ok(())
 }
 
-/*
-Print the download speed every second
-*/
+/// Print the download speed every second
 async fn print_loop(counters: Arc<Counters>) {
     let mut past_seconds: VecDeque<u64> = VecDeque::with_capacity(10);
 
