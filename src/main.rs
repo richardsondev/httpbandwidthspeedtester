@@ -4,6 +4,7 @@ use bytes::Bytes;
 use chrono::Local;
 use futures_util::StreamExt;
 use http_body_util::{BodyStream, Empty};
+use httpbandwidthspeedtester::{compute_ranges, Speed};
 use hyper::{
     header::{CONTENT_LENGTH, RANGE},
     http::HeaderValue,
@@ -105,15 +106,14 @@ async fn print_loop(download_state: Arc<Mutex<DownloadState>>) {
         let avg_speed: u64 = total_past_bytes / max(state.past_seconds.len() as u64, 1);
 
         // Print the average speed
-        let avg_speed_kib: u64 = avg_speed / 1024;
-        let avg_speed_mib: u64 = avg_speed / (1024 * 1024);
+        let speed = Speed::from_bps(avg_speed);
 
         println!(
             "[{}] Average speed: {} B/s, {} KiB/s, {} MiB/s",
             Local::now().format("%Y-%m-%d %H:%M:%S"),
-            avg_speed,
-            avg_speed_kib,
-            avg_speed_mib
+            speed.bps,
+            speed.kib_s,
+            speed.mib_s
         );
     }
 }
@@ -151,25 +151,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .unwrap_or(1) as u64;
 
     let ranges: Vec<Option<String>> = match content_length {
-        Some(cl) if cl > 0 => {
-            let bytes_per_cpu: u64 = cl / cpu_count;
-            (0..cpu_count)
-                .map(|i| {
-                    let start: u64 = i * bytes_per_cpu;
-                    let end: String = if i == cpu_count - 1 {
-                        String::new()
-                    } else {
-                        format!("{}", (i + 1) * bytes_per_cpu - 1)
-                    };
-                    Some(format!("bytes={}-{}", start, end))
-                })
-                .collect()
-        }
+        Some(cl) if cl > 0 => compute_ranges(Some(cl), cpu_count),
         _ => {
             eprintln!(
                 "Warning: Server did not provide Content-Length, falling back to single-worker streaming download"
             );
-            vec![None]
+            compute_ranges(None, cpu_count)
         }
     };
 
@@ -208,11 +195,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let state: tokio::sync::MutexGuard<'_, DownloadState> = download_state.lock().await;
     let elapsed_secs = start_time.elapsed().as_secs_f64().max(1e-9);
     let avg_speed: u64 = (state.total_bytes_downloaded as f64 / elapsed_secs) as u64;
-    let avg_speed_kib: u64 = avg_speed / 1024;
-    let avg_speed_mib: u64 = avg_speed / (1024 * 1024);
+    let speed = Speed::from_bps(avg_speed);
     println!(
         "Download completed: {} bytes downloaded at an average speed of {} B/s, {} KiB/s, {} MiB/s",
-        state.total_bytes_downloaded, avg_speed, avg_speed_kib, avg_speed_mib
+        state.total_bytes_downloaded, speed.bps, speed.kib_s, speed.mib_s
     );
 
     Ok(())
