@@ -22,6 +22,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     strategy:
       matrix:
         target:
@@ -124,6 +126,12 @@ jobs:
           cp ./target/${{ matrix.target.rustTarget }}/release/httpbandwidthspeedtester${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }} ./httpbandwidthspeedtester-${{ github.ref_name }}-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }} &&
           gh release upload ${{ github.event.release.tag_name }} ./httpbandwidthspeedtester-${{ github.ref_name }}-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }}#"httpbandwidthspeedtester-${{ github.ref_name }}-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }} (${{ matrix.target.displayName }})"
 
+      - name: Attest build provenance for binary
+        if: github.event_name == 'release'
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: ./httpbandwidthspeedtester-${{ github.ref_name }}-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }}
+
       - name: Generate SHA-256 checksum for binary
         if: github.event_name == 'release'
         env:
@@ -163,3 +171,9 @@ jobs:
           sha256sum "${DEB}" > "${DEB}.sha256"
           cat "${DEB}.sha256"
           gh release upload ${{ github.event.release.tag_name }} --clobber "${DEB}" "${DEB}.sha256"
+
+      - name: Attest build provenance for .deb
+        if: ${{ github.event_name == 'release' && matrix.target.debArch != '' }}
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: ./httpbandwidthspeedtester_*_${{ matrix.target.debArch }}.deb
