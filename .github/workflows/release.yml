@@ -124,6 +124,16 @@ jobs:
           cp ./target/${{ matrix.target.rustTarget }}/release/httpbandwidthspeedtester${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }} ./httpbandwidthspeedtester-${{ github.ref_name }}-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }} &&
           gh release upload ${{ github.event.release.tag_name }} ./httpbandwidthspeedtester-${{ github.ref_name }}-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }}#"httpbandwidthspeedtester-${{ github.ref_name }}-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }} (${{ matrix.target.displayName }})"
 
+      - name: Generate SHA-256 checksum for binary
+        if: github.event_name == 'release'
+        env:
+          ASSET: httpbandwidthspeedtester-${{ github.ref_name }}-${{ matrix.target.rustTarget }}${{ endsWith(matrix.target.rustTarget, '-windows-gnu') && '.exe' || '' }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha256sum "${ASSET}" > "${ASSET}.sha256"
+          cat "${ASSET}.sha256"
+          gh release upload ${{ github.event.release.tag_name }} --clobber "${ASSET}.sha256"
+
       - name: Build .deb package
         if: ${{ github.event_name == 'release' && matrix.target.debArch != '' }}
         run: |
@@ -149,4 +159,7 @@ jobs:
         run: |
           VERSION="${{ github.ref_name }}"
           VERSION="${VERSION#v}"
-          gh release upload ${{ github.event.release.tag_name }} --clobber ./httpbandwidthspeedtester_${VERSION}_${{ matrix.target.debArch }}.deb
+          DEB="httpbandwidthspeedtester_${VERSION}_${{ matrix.target.debArch }}.deb"
+          sha256sum "${DEB}" > "${DEB}.sha256"
+          cat "${DEB}.sha256"
+          gh release upload ${{ github.event.release.tag_name }} --clobber "${DEB}" "${DEB}.sha256"
