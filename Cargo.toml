@@ -3,7 +3,7 @@ name = "httpbandwidthspeedtester"
 version = "0.1.0"
 authors = ["richardsondev"]
 edition = "2021"
-rust-version = "1.74"
+rust-version = "1.86"
 
 [lib]
 path = "src/lib.rs"
