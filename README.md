@@ -50,6 +50,41 @@ dd if=/dev/zero of=testfile.bin bs=1M count=10240
 
 This command will create a 10GB file named `testfile.bin` filled with zeroes. After running this command, make sure that the file is accessible via HTTP or HTTPS by placing it in the appropriate directory of your web server. You can then use the URL of this file as the argument to the bandwidth testing tool.
 
+## Range request support is required
+
+This tool deliberately uses HTTP byte-range requests so that it can fan a
+single download out across as many TCP connections as the host has CPU cores
+— that is what lets it saturate links that a single connection cannot. As a
+direct consequence the server **must** support range requests:
+
+- It must advertise `Accept-Ranges: bytes` on the initial probe.
+- It must return `206 Partial Content` for ranged `GET` requests rather than
+  silently returning the whole body with `200 OK`.
+
+A server that ignores range requests will either fail outright or, worse,
+each worker will download the full file and the reported bandwidth will be a
+multiple of the real value. Static origins like nginx, Apache, S3, GCS, and
+most CDNs satisfy these requirements out of the box; dynamically generated
+endpoints often do not.
+
+If the probe shows the server does not support ranges, the tool will fall
+back to a single-worker streaming download (see also the *No Content-Length*
+note below). In that mode it still produces a correct byte count and speed
+reading, but it cannot use more than one connection.
+
 ## Note
 
-Not all servers support HTTP range requests. If the server doesn't support them, the download may fail or not be as fast as it could be. Always make sure that the server is capable of handling range requests and multiple connections before running this test.
+Not all servers support HTTP range requests (see the section above for the
+full requirement). If the server doesn't support them, the download may fall
+back to a single connection or fail entirely. Always make sure that the
+server is capable of handling range requests and multiple connections before
+running this test.
+
+## No Content-Length
+
+If the server's response to the initial probe does not carry a
+`Content-Length` header (for example, dynamically generated `chunked`
+responses), the tool cannot pre-compute byte ranges. In that case it falls
+back to a single sequential worker that streams the body to EOF. The
+reported byte count and speed are still correct; only the parallelism is
+disabled.
