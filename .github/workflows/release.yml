@@ -62,6 +62,10 @@ jobs:
               rustTarget: x86_64-apple-darwin,
               runner: 'macos-latest' }
 
+          - { displayName: 64-bit macOS (Apple Silicon),
+              rustTarget: aarch64-apple-darwin,
+              runner: 'macos-latest' }
+
     runs-on: ${{ matrix.target.runner }}
     steps:
       # Get the machine ready to build
@@ -91,7 +95,7 @@ jobs:
         run: sudo apt-get install -y gcc-arm-linux-gnueabihf gcc-arm-linux-gnueabi gcc-arm-none-eabi binutils-arm-linux-gnueabi
 
       - name: Add ARM64 Build Dependencies
-        if: ${{ contains(matrix.target.rustTarget, 'aarch64') }}
+        if: ${{ contains(matrix.target.rustTarget, 'aarch64-unknown-linux') }}
         run: sudo apt-get install -y gcc-aarch64-linux-gnu crossbuild-essential-arm64
 
       - name: Add 32-bit Linux Build Dependencies
