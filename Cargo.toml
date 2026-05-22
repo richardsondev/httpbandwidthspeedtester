@@ -16,7 +16,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 chrono = "0.4"
 tokio-native-tls = "0.3"
 futures-util = "0.3"
-openssl = { version = "0.10.79", features = ["vendored"] }
+openssl = { version = "0.10.80", features = ["vendored"] }
 
 [profile.release]
 lto = "fat"
