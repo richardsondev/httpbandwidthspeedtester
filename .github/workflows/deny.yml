@@ -35,7 +35,7 @@ jobs:
           fetch-depth: 1
 
       - name: cargo-deny
-        uses: EmbarkStudios/cargo-deny-action@e2f4ede4a4e60ea15ff31bc0647485d80c66cfba # v2.0.12
+        uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe # v2.0.12
         with:
           command: check
           log-level: warn
